@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador Financiero — Mis Pichos</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, sans-serif; background: #fafaf8; color: #1a1a1a; min-height: 100vh; }
+#loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 16px; }
+#loading p { font-size: 14px; color: #888; }
+.spinner { width: 32px; height: 32px; border: 2px solid #e5e5e0; border-top-color: #378ADD; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#error { display: none; padding: 48px 24px; text-align: center; max-width: 500px; margin: 0 auto; }
+#error h2 { font-size: 16px; font-weight: 500; color: #a32d2d; margin-bottom: 8px; }
+#error p { font-size: 13px; color: #888; line-height: 1.6; margin-bottom: 8px; }
+#error code { font-size: 12px; background: #f5f5f3; padding: 2px 6px; border-radius: 4px; }
+#app { display: none; max-width: 900px; margin: 0 auto; padding: 32px 24px 56px; }
+.header { margin-bottom: 28px; border-bottom: .5px solid #e5e5e0; padding-bottom: 16px; }
+.header h1 { font-size: 18px; font-weight: 500; color: #1a1a1a; margin-bottom: 4px; }
+.header p { font-size: 12px; color: #aaa; margin-bottom: 6px; }
+.source { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #3b6d11; background: #eaf3de; padding: 2px 9px; border-radius: 20px; }
+.source a { color: #3b6d11; text-decoration: none; border-bottom: 1px solid #97c459; }
+.sliders { background: #fff; border: .5px solid #e5e5e0; border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; }
+.slider-title { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px; }
+.row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.row:last-child { margin-bottom: 0; }
+.lbl { font-size: 12px; color: #666; white-space: nowrap; width: 200px; flex-shrink: 0; }
+input[type=range] { flex: 1; accent-color: #378ADD; cursor: pointer; }
+.val { font-size: 15px; font-weight: 500; min-width: 52px; color: #1a1a1a; text-align: right; }
+.pp { font-size: 11px; min-width: 52px; text-align: right; }
+.chips { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 20px; }
+.chip { background: #fff; border: .5px solid #e5e5e0; border-radius: 8px; padding: .6rem .9rem; }
+.chip-lbl { font-size: 10px; color: #aaa; margin: 0 0 3px; }
+.chip-val { font-size: 14px; font-weight: 500; margin: 0; color: #1a1a1a; }
+.sec { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: .05em; margin: 20px 0 8px; display: flex; align-items: center; gap: 8px; }
+.sec span { flex: 1; height: .5px; background: #e5e5e0; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-bottom: 10px; }
+.card { background: #fff; border: .5px solid #e5e5e0; border-radius: 10px; padding: .9rem 1rem; transition: border-color .15s; }
+.card.changed { border-color: #378ADD; }
+.card.accent { background: #faeeda; border-color: #f9c775; }
+.card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.card-lbl { font-size: 11px; color: #aaa; line-height: 1.4; padding-right: 8px; }
+.delta { font-size: 11px; padding: 1px 7px; border-radius: 20px; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+.delta-pos { background: #eaf3de; color: #3b6d11; }
+.delta-neg { background: #fcebeb; color: #a32d2d; }
+.delta-neu { background: #f5f5f3; color: #aaa; border: .5px solid #e5e5e0; }
+.card-vals { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.base-val { font-size: 13px; color: #bbb; text-decoration: line-through; }
+.curr-val { font-size: 19px; font-weight: 500; color: #1a1a1a; }
+.curr-val.good { color: #3b6d11; }
+.curr-val.bad { color: #a32d2d; }
+.arrow { font-size: 13px; color: #ddd; }
+.note { font-size: 11px; color: #854f0b; padding: .55rem .8rem; background: #faeeda; border-radius: 8px; border-left: 2px solid #f9c775; margin-top: 6px; line-height: 1.5; }
+.fx-note { font-size: 11px; color: #bbb; margin-top: 12px; text-align: right; }
+@media (max-width: 600px) {
+  .chips { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .grid2 { grid-template-columns: 1fr; }
+  .lbl { width: 140px; font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p id="loading-msg">Conectando con Google Sheets…</p>
+</div>
+
+<div id="error">
+  <h2>No se pudo cargar el modelo</h2>
+  <p>Verificá que el Google Sheet sea accesible ("Cualquier persona con el enlace puede ver") y que la API key sea válida.</p>
+  <p id="err-detail"></p>
+</div>
+
+<div id="app">
+  <div class="header">
+    <h1>Simulador de Palancas — Argentina</h1>
+    <p>Impacto en métricas clave al variar retención, calidad de servicio y nivel de adquisición</p>
+    <span class="source">✓ Datos en tiempo real desde <a id="sheet-link" href="#" target="_blank">Forecast 2026</a></span>
+  </div>
+
+  <div class="sliders">
+    <p class="slider-title">Palancas</p>
+    <div class="row">
+      <span class="lbl">Retención post 1ra compra</span>
+      <input type="range" min="28" max="45" value="38" id="slR" step="1">
+      <span class="val" id="svR">38%</span>
+      <span class="pp" id="dR" style="color:#aaa">base</span>
+    </div>
+    <div class="row">
+      <span class="lbl">In Stock</span>
+      <input type="range" min="88" max="100" value="96" id="slS" step="0.5">
+      <span class="val" id="svS">96.0%</span>
+      <span class="pp" id="dS" style="color:#aaa">base</span>
+    </div>
+    <div class="row">
+      <span class="lbl">On Time</span>
+      <input type="range" min="80" max="100" value="92" id="slT" step="0.5">
+      <span class="val" id="svT">92.0%</span>
+      <span class="pp" id="dT" style="color:#aaa">base</span>
+    </div>
+  </div>
+
+  <div class="chips">
+    <div class="chip"><p class="chip-lbl">Churn mensual derivado</p><p class="chip-val" id="cChurn">—</p></div>
+    <div class="chip"><p class="chip-lbl">Usuarios perdidos / mes al BE</p><p class="chip-val" id="cLost">—</p></div>
+    <div class="chip"><p class="chip-lbl">Δ churn vs modelo base</p><p class="chip-val" id="cDiff">—</p></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card" id="cd-capital"><div class="card-top"><span class="card-lbl">Capital a pedir (+20% buffer)</span><span class="delta delta-neu" id="dg-capital">—</span></div><div class="card-vals"><span class="base-val" id="bv-capital">—</span><span class="arrow">→</span><span class="curr-val" id="cv-capital">—</span></div></div>
+    <div class="card" id="cd-r28"><div class="card-top"><span class="card-lbl">Recurrentes Dic 2028</span><span class="delta delta-neu" id="dg-r28">—</span></div><div class="card-vals"><span class="base-val" id="bv-r28">—</span><span class="arrow">→</span><span class="curr-val" id="cv-r28">—</span></div></div>
+    <div class="card" id="cd-becon"><div class="card-top"><span class="card-lbl">BE c/ adquisición</span><span class="delta delta-neu" id="dg-becon">—</span></div><div class="card-vals"><span class="base-val" id="bv-becon">—</span><span class="arrow">→</span><span class="curr-val" id="cv-becon">—</span></div></div>
+    <div class="card" id="cd-besin"><div class="card-top"><span class="card-lbl">BE s/ adquisición</span><span class="delta delta-neu" id="dg-besin">—</span></div><div class="card-vals"><span class="base-val" id="bv-besin">—</span><span class="arrow">→</span><span class="curr-val" id="cv-besin">—</span></div></div>
+  </div>
+
+  <div class="sec">Al mes del BE c/ adquisición — anualizado <span></span></div>
+  <div class="grid2" style="margin-bottom:10px">
+    <div class="card" id="cd-gmv"><div class="card-top"><span class="card-lbl">GMV</span><span class="delta delta-neu" id="dg-gmv">—</span></div><div class="card-vals"><span class="base-val" id="bv-gmv">—</span><span class="arrow">→</span><span class="curr-val" id="cv-gmv">—</span></div></div>
+    <div class="card" id="cd-rev"><div class="card-top"><span class="card-lbl">Revenue</span><span class="delta delta-neu" id="dg-rev">—</span></div><div class="card-vals"><span class="base-val" id="bv-rev">—</span><span class="arrow">→</span><span class="curr-val" id="cv-rev">—</span></div></div>
+  </div>
+
+  <div class="sec">EBITDA recurrentes (sin adquisición) <span></span></div>
+  <div class="grid2" style="margin-bottom:10px">
+    <div class="card" id="cd-ebitda-sin"><div class="card-top"><span class="card-lbl">EBITDA s/ adq. anualizado</span><span class="delta delta-neu" id="dg-ebitda-sin">—</span></div><div class="card-vals"><span class="base-val" id="bv-ebitda-sin">—</span><span class="arrow">→</span><span class="curr-val" id="cv-ebitda-sin">—</span></div></div>
+    <div class="card" id="cd-margin-sin"><div class="card-top"><span class="card-lbl">EBITDA s/ adq. % s/ Revenue</span><span class="delta delta-neu" id="dg-margin-sin">—</span></div><div class="card-vals"><span class="base-val" id="bv-margin-sin">—</span><span class="arrow">→</span><span class="curr-val" id="cv-margin-sin">—</span></div></div>
+  </div>
+
+  <div class="sec">Adquisición mínima para mantener base (N-to-C = 1) <span></span></div>
+  <div class="grid2" style="margin-bottom:10px">
+    <div class="card" id="cd-minnew"><div class="card-top"><span class="card-lbl">Nuevos mínimos / mes</span><span class="delta delta-neu" id="dg-minnew">—</span></div><div class="card-vals"><span class="base-val" id="bv-minnew">—</span><span class="arrow">→</span><span class="curr-val" id="cv-minnew">—</span></div></div>
+    <div class="card" id="cd-ebitda-net"><div class="card-top"><span class="card-lbl">EBITDA neto mínimo anualizado</span><span class="delta delta-neu" id="dg-ebitda-net">—</span></div><div class="card-vals"><span class="base-val" id="bv-ebitda-net">—</span><span class="arrow">→</span><span class="curr-val" id="cv-ebitda-net">—</span></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card accent" id="cd-margin-net"><div class="card-top"><span class="card-lbl" style="color:#854f0b">EBITDA neto mínimo % s/ Revenue</span><span class="delta delta-neu" id="dg-margin-net">—</span></div><div class="card-vals"><span class="base-val" id="bv-margin-net">—</span><span class="arrow">→</span><span class="curr-val" id="cv-margin-net">—</span></div></div>
+    <div class="card" id="cd-ebitda-con"><div class="card-top"><span class="card-lbl">EBITDA c/ adq. total % s/ Revenue</span><span class="delta delta-neu" id="dg-ebitda-con">—</span></div><div class="card-vals"><span class="base-val" id="bv-ebitda-con">—</span><span class="arrow">→</span><span class="curr-val" id="cv-ebitda-con">—</span></div></div>
+  </div>
+
+  <p class="note">Nuevos mínimos = usuarios churned al BE ÷ tasa de retención. EBITDA neto = EBITDA recurrentes − costo de adquirir esos usuarios (33.49% del ticket: ads 20% + cupones 10% + procesamiento 3.49%).</p>
+  <p class="fx-note">Todos los valores en USD · Tipo de cambio BNA constante: 1.450 ARS/USD · Fuente: Google Sheets (tiempo real)</p>
+</div>
+
+<script>
+const SHEET_ID   = '1haF4Mdjg1k5VmLOp4xC4gwr7hWTHKF7e7c-oZcg0PcU';
+const API_KEY    = 'AIzaSyAxjuQG8ChIKKYxNnQAJoZ3PNXvsl1Lh88';
+const SHEET_NAME = 'Borrador realista growth (uso G';
+const N_MONTHS   = 36;
+const FX = 1450, BUF = 1.2, VAR_NEW = 0.3349;
+
+const ROWS = {
+  inStock:3, onTime:4, ticket:6, retention:8, churnModel:10,
+  idxRecompra:12, recBase:14, nuBase:15, gmvBase:25,
+  esBase:30, ecBase:39, revBase:44, mcuBase:87
+};
+
+const MN=['Ene 26','Feb 26','Mar 26','Abr 26','May 26','Jun 26','Jul 26','Ago 26','Sep 26','Oct 26','Nov 26','Dic 26','Ene 27','Feb 27','Mar 27','Abr 27','May 27','Jun 27','Jul 27','Ago 27','Sep 27','Oct 27','Nov 27','Dic 27','Ene 28','Feb 28','Mar 28','Abr 28','May 28','Jun 28','Jul 28','Ago 28','Sep 28','Oct 28','Nov 28','Dic 28'];
+const MNI = Object.fromEntries(MN.map((m,i)=>[m,i]));
+let D={}, BASE={};
+
+async function loadFromSheets(){
+  const range = encodeURIComponent(`'${SHEET_NAME}'!A1:AK130`);
+  const url   = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?key=${API_KEY}`;
+  document.getElementById('loading-msg').textContent = 'Leyendo modelo desde Google Sheets…';
+  const res = await fetch(url);
+  if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error((e.error&&e.error.message)||`HTTP ${res.status}`); }
+  const rows = (await res.json()).values;
+
+  function extractRow(n){
+    const r=rows[n-1]||[], vals=[];
+    for(let c=1;c<=N_MONTHS;c++){
+      const raw=r[c]; const v=raw!==undefined&&raw!==''?parseFloat(String(raw).replace(',','.')):0;
+      vals.push(isNaN(v)?0:v);
+    }
+    return vals;
+  }
+
+  for(const [key,rowNum] of Object.entries(ROWS)) D[key]=extractRow(rowNum);
+
+  const bR=Math.round(D.retention[2]*100), bS=Math.round(D.inStock[0]*200)/2, bT=Math.round(D.onTime[0]*200)/2;
+  document.getElementById('slR').value=bR;
+  document.getElementById('slS').value=bS;
+  document.getElementById('slT').value=bT;
+  document.getElementById('sheet-link').href=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
+  BASE=calcScenario(bR/100, bS/100, bT/100);
+  document.getElementById('loading').style.display='none';
+  document.getElementById('app').style.display='block';
+  update();
+}
+
+function churnFromService(is,ot,idx){ return ((1-is)+(1-ot)*0.5)*idx; }
+
+function calcScenario(r,is,ot){
+  const dr=[],rec=[],cuArr=[];
+  for(let t=0;t<N_MONTHS;t++){
+    const idx=D.idxRecompra[t], cr=churnFromService(is,ot,idx), crBase=D.churnModel[t];
+    const df=t>=2?D.nuBase[t-2]*(r-D.retention[t]):0;
+    dr[t]=(t>0?dr[t-1]*(1-cr):0)+df;
+    rec[t]=D.recBase[t]+dr[t];
+    const de=dr[t]*D.mcuBase[t], cd=(cr-crBase)*D.recBase[t]*D.mcuBase[t];
+    const ec=D.ecBase[t]+de-cd, es=D.esBase[t]+de-cd;
+    const gmv=(rec[t]*D.ticket[t]*idx)+(D.nuBase[t]*D.ticket[t]);
+    const rev=D.revBase[t]+(gmv-D.gmvBase[t])*0.1539;
+    cuArr[t]={ec,es,gmv,rev,rec:rec[t],cr,cum:Math.round((t>0?cuArr[t-1].cum:0)+ec/FX)};
+  }
+  const bi=cuArr.findIndex(v=>v.es>0), ci=cuArr.findIndex(v=>v.ec>0);
+  const pk=-Math.min(...cuArr.map(v=>v.cum));
+  const at=ci>=0?cuArr[ci]:null, tBE=ci>=0?D.ticket[ci]:D.ticket[35];
+  const gmvBE=at?Math.round(at.gmv*12/FX):null, revBE=at?Math.round(at.rev*12/FX):null;
+  const eCon=at?Math.round(at.ec*12/FX):null, eSin=at?Math.round(at.es*12/FX):null;
+  const mCon=revBE&&eCon!==null?eCon/revBE*100:null, mSin=revBE&&eSin!==null?eSin/revBE*100:null;
+  const lostBE=at?Math.round(at.rec*at.cr):null, minN=lostBE!==null?Math.ceil(lostBE/r):null;
+  const minI=minN!==null?Math.round(minN*tBE*VAR_NEW*12/FX):null;
+  const eNet=eSin!==null&&minI!==null?eSin-minI:null, mNet=revBE&&eNet!==null?eNet/revBE*100:null;
+  return{be_sin:bi>=0?MN[bi]:'N/A',be_con:ci>=0?MN[ci]:'N/A',peak:pk,peakBuf:Math.round(pk*BUF),
+    gmvBE,revBE,eCon,eSin,mCon,mSin,minN,eNet,mNet,
+    churnRate:churnFromService(is,ot,D.idxRecompra[0]),lostBE,r28:Math.round(rec[35])};
+}
+
+const fN=v=>v===null?'N/A':v.toLocaleString('es-AR',{maximumFractionDigits:0});
+const fU=v=>v===null?'N/A':'$'+Math.round(v).toLocaleString('es-AR')+' USD';
+const fM=v=>{if(v===null)return'N/A';const a=Math.abs(v),neg=v<0;if(a>=1e6)return(neg?'-':'')+'$'+(a/1e6).toFixed(1)+'M USD';if(a>=1e3)return(neg?'-':'')+'$'+(a/1e3).toFixed(0)+'k USD';return'$'+v+' USD';};
+const fp=v=>(v*100).toFixed(2)+'%', fPct=v=>v===null?'N/A':v.toFixed(1)+'%';
+function mDiff(a,b){if(a==='N/A'||b==='N/A')return null;return MNI[b]-MNI[a];}
+function pctD(c,b){return b?Math.round((c-b)/Math.abs(b)*100):null;}
+
+function setCard(id,bStr,cStr,dtag,dcls,good,changed){
+  document.getElementById('bv-'+id).textContent=bStr;
+  const cv=document.getElementById('cv-'+id);
+  cv.textContent=cStr; cv.className='curr-val'+(good===true?' good':good===false?' bad':'');
+  const dg=document.getElementById('dg-'+id); dg.textContent=dtag; dg.className='delta '+dcls;
+  const card=document.getElementById('cd-'+id), isA=card.classList.contains('accent');
+  card.className='card'+(isA?' accent':'')+(changed?' changed':'');
+}
+
+function update(){
+  const rv=+document.getElementById('slR').value, sv=+document.getElementById('slS').value, tv=+document.getElementById('slT').value;
+  const s=calcScenario(rv/100,sv/100,tv/100);
+  const bR=Math.round(D.retention[2]*100), bS=Math.round(D.inStock[0]*200)/2, bT=Math.round(D.onTime[0]*200)/2;
+
+  function fmtPP(v,id){const el=document.getElementById(id);el.textContent=v!==0?(v>0?'+':'')+v.toFixed(v%1===0?0:1)+'pp':'base';el.style.color=v>0?'#3b6d11':v<0?'#a32d2d':'#aaa';}
+  document.getElementById('svR').textContent=rv+'%';
+  document.getElementById('svS').textContent=sv.toFixed(1)+'%';
+  document.getElementById('svT').textContent=tv.toFixed(1)+'%';
+  fmtPP(rv-bR,'dR'); fmtPP(sv-bS,'dS'); fmtPP(tv-bT,'dT');
+
+  const cd=s.churnRate-BASE.churnRate;
+  document.getElementById('cChurn').textContent=fp(s.churnRate);
+  document.getElementById('cChurn').style.color=cd>0.0005?'#a32d2d':cd<-0.0005?'#3b6d11':'#1a1a1a';
+  document.getElementById('cLost').textContent=s.lostBE!==null?fN(s.lostBE)+' usuarios':'—';
+  const dEl=document.getElementById('cDiff'); dEl.textContent=(cd>=0?'+':'')+fp(cd);
+  dEl.style.color=cd>0.0005?'#a32d2d':cd<-0.0005?'#3b6d11':'#aaa';
+
+  const capD=s.peakBuf-BASE.peakBuf, capP=Math.round(capD/BASE.peakBuf*100);
+  setCard('capital',fU(BASE.peakBuf),fU(s.peakBuf),(capD>=0?'+':'')+capP+'%',capD<0?'delta-pos':capD>0?'delta-neg':'delta-neu',capD<0,capD!==0);
+  const r28d=s.r28-BASE.r28;
+  setCard('r28',fN(BASE.r28),fN(s.r28),(r28d>=0?'+':'')+fN(r28d),r28d>0?'delta-pos':r28d<0?'delta-neg':'delta-neu',r28d>0,r28d!==0);
+  const bcd=mDiff(BASE.be_con,s.be_con);
+  setCard('becon',BASE.be_con,s.be_con,bcd!==null?(bcd===0?'=':bcd<0?bcd+'m':'+'+bcd+'m'):'—',bcd!==null&&bcd<0?'delta-pos':bcd>0?'delta-neg':'delta-neu',bcd!==null&&bcd<=0,bcd!==0&&bcd!==null);
+  const bsd=mDiff(BASE.be_sin,s.be_sin);
+  setCard('besin',BASE.be_sin,s.be_sin,bsd!==null?(bsd===0?'=':bsd<0?bsd+'m':'+'+bsd+'m'):'—',bsd!==null&&bsd<0?'delta-pos':bsd>0?'delta-neg':'delta-neu',bsd!==null&&bsd<=0,bsd!==0&&bsd!==null);
+  const gmvP=pctD(s.gmvBE,BASE.gmvBE);
+  setCard('gmv',fM(BASE.gmvBE),fM(s.gmvBE),gmvP!==null?(gmvP>=0?'+':'')+gmvP+'%':'—',gmvP!==null&&gmvP<0?'delta-pos':gmvP>0?'delta-neg':'delta-neu',s.gmvBE!==null,gmvP!==0&&gmvP!==null);
+  const revP=pctD(s.revBE,BASE.revBE);
+  setCard('rev',fM(BASE.revBE),fM(s.revBE),revP!==null?(revP>=0?'+':'')+revP+'%':'—',revP!==null&&revP<0?'delta-pos':revP>0?'delta-neg':'delta-neu',s.revBE!==null,revP!==0&&revP!==null);
+  const esP=pctD(s.eSin,BASE.eSin);
+  setCard('ebitda-sin',fM(BASE.eSin),fM(s.eSin),esP!==null?(esP>=0?'+':'')+esP+'%':'—',esP!==null&&esP>0?'delta-pos':esP<0?'delta-neg':'delta-neu',s.eSin!==null&&s.eSin>=0,esP!==0&&esP!==null);
+  const msD=s.mSin!==null&&BASE.mSin!==null?+(s.mSin-BASE.mSin).toFixed(1):null;
+  setCard('margin-sin',fPct(BASE.mSin),fPct(s.mSin),msD!==null?(msD>=0?'+':'')+msD+'pp':'—',msD!==null&&msD>0?'delta-pos':msD<0?'delta-neg':'delta-neu',s.mSin!==null&&s.mSin>0,msD!==0&&msD!==null);
+  const mnD=s.minN!==null&&BASE.minN!==null?s.minN-BASE.minN:null;
+  setCard('minnew',fN(BASE.minN)+'/mes',s.minN!==null?fN(s.minN)+'/mes':'N/A',mnD!==null?(mnD>=0?'+':'')+fN(mnD):'—',mnD!==null&&mnD<0?'delta-pos':mnD>0?'delta-neg':'delta-neu',mnD!==null&&mnD<=0,mnD!==0&&mnD!==null);
+  const enP=pctD(s.eNet,BASE.eNet);
+  setCard('ebitda-net',fM(BASE.eNet),fM(s.eNet),enP!==null?(enP>=0?'+':'')+enP+'%':'—',enP!==null&&enP>0?'delta-pos':enP<0?'delta-neg':'delta-neu',s.eNet!==null&&s.eNet>=0,enP!==0&&enP!==null);
+  const mnD2=s.mNet!==null&&BASE.mNet!==null?+(s.mNet-BASE.mNet).toFixed(1):null;
+  setCard('margin-net',fPct(BASE.mNet),fPct(s.mNet),mnD2!==null?(mnD2>=0?'+':'')+mnD2+'pp':'—',mnD2!==null&&mnD2>0?'delta-pos':mnD2<0?'delta-neg':'delta-neu',s.mNet!==null&&s.mNet>0,mnD2!==0&&mnD2!==null);
+  const mcD2=s.mCon!==null&&BASE.mCon!==null?+(s.mCon-BASE.mCon).toFixed(1):null;
+  setCard('ebitda-con',fPct(BASE.mCon),fPct(s.mCon),mcD2!==null?(mcD2>=0?'+':'')+mcD2+'pp':'—',mcD2!==null&&mcD2>0?'delta-pos':mcD2<0?'delta-neg':'delta-neu',s.mCon!==null&&s.mCon>0,mcD2!==0&&mcD2!==null);
+}
+
+['slR','slS','slT'].forEach(id=>document.getElementById(id).addEventListener('input',update));
+
+loadFromSheets().catch(err=>{
+  document.getElementById('loading').style.display='none';
+  document.getElementById('error').style.display='block';
+  document.getElementById('err-detail').textContent=err.message;
+});
+</script>
+</body>
+</html>
